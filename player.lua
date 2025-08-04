@@ -13,6 +13,8 @@ function Player.new(world, joystick, x, y)
     self.collider = world:newRectangleCollider(x, y, w, h)
     self.collider:setFixedRotation(true)
     self.collider:setRestitution(0.2)
+    self.collider:setFriction(0.9)
+    self.collider:setLinearDamping(1)
 
     return self
 end
@@ -23,7 +25,8 @@ function Player:update(dt)
     -- Horizontal movement
     if self.joystick then
         local moveX = self.joystick:getAxis(1)
-        col:setX(col:getX() + moveX * self.speed * dt)
+        local vx, vy = col:getLinearVelocity()
+        col:setLinearVelocity(moveX * self.speed, vy)
 
         -- Jumping
         if self.joystick:isGamepadDown("a") and self:isGrounded() then
