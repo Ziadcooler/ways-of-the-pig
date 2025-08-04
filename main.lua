@@ -21,8 +21,8 @@ else
     miniScale = 2
 end
 
-sharpFont = love.graphics.newFont(30)
-love.graphics.setFont(sharpFont)
+retroFont = love.graphics.newFont(30)
+love.graphics.setFont(retroFont)
 
 local gameState
 local previousGameState 
@@ -116,9 +116,9 @@ function love.draw()
     love.graphics.setBackgroundColor(0.2, 0.7, 1)
 
     images = {
-        dpad = love.graphics.newImage("assets/dpad.png"),
-        ps_X = love.graphics.newImage("assets/ps_X.png"),
-        xbox_A = love.graphics.newImage("assets/xbox_A.png"),
+        dpad = love.graphics.newImage("assets/images/dpad.png"),
+        ps_X = love.graphics.newImage("assets/images/ps_X.png"),
+        xbox_A = love.graphics.newImage("assets/images/xbox_A.png"),
     }
 
     if gameState == "startMenu" then
@@ -380,55 +380,51 @@ function love.gamepadpressed(joystick, btn)
                 gameState = previousGameState 
             end
         end 
-    elseif gameState == "settingsMenu" then
+    elseif gameState == "settingsMenu" and (not pausedPlayer or (pausedPlayer.paused and pausedPlayer.joystick == joystick)) then
         local option = settingsMenuButtons[settingsMenuIndex]
-        local pausedPlayer = player[pausedPlayerIndex]
+        if btn == "dpup" then
+            settingsMenuIndex = settingsMenuIndex - 1
 
-        if pausedPlayer.paused and pausedPlayer.joystick == joystick then
-            if btn == "dpup" then
-                settingsMenuIndex = settingsMenuIndex - 1
-
-                if settingsMenuIndex < 1 then settingsMenuIndex = #settingsMenuButtons end
-            elseif btn == "dpdown" then
-                settingsMenuIndex = settingsMenuIndex + 1
-                if settingsMenuIndex > #settingsMenuButtons then settingsMenuIndex = 1 end
-            elseif btn == "dpleft" then
-                if option.name == "Volume: " and option.isOn then
-                    currentVolume = currentVolume - 0.02
-                end
-            elseif btn == "dpright" then
-                if option.name == "Volume: " and option.isOn then
-                    currentVolume = currentVolume + 0.02
-                end
-            elseif btn == "a" then
-                if option.name == "Volume: " then
-                    if option.isOn then
-                        previousVolume = currentVolume
-                        currentVolume = 0
-                    elseif not option.isOn then
-                        currentVolume = previousVolume
-                    end
-
-                    option.isOn = not option.isOn
-                elseif option.name == "Hitbox: " then
-                    option.isOn = not option.isOn
-                elseif option.name == "Back" then
-                    settingsMenuIndex = 1
-                    if previousGameState == "pauseMenu" then
-                        previousGameState = "game"
-                        gameState = "pauseMenu"
-                        return 
-                    end
-                    gameState = previousGameState 
-                end
+            if settingsMenuIndex < 1 then settingsMenuIndex = #settingsMenuButtons end
+        elseif btn == "dpdown" then
+            settingsMenuIndex = settingsMenuIndex + 1
+            if settingsMenuIndex > #settingsMenuButtons then settingsMenuIndex = 1 end
+        elseif btn == "dpleft" then
+            if option.name == "Volume: " and option.isOn then
+                currentVolume = currentVolume - 0.02
             end
-        end 
+        elseif btn == "dpright" then
+            if option.name == "Volume: " and option.isOn then
+                currentVolume = currentVolume + 0.02
+            end
+        elseif btn == "a" then
+            if option.name == "Volume: " then
+                if option.isOn then
+                    previousVolume = currentVolume
+                    currentVolume = 0
+                elseif not option.isOn then
+                    currentVolume = previousVolume
+                end
+
+                option.isOn = not option.isOn
+            elseif option.name == "Hitbox: " then
+                option.isOn = not option.isOn
+            elseif option.name == "Back" then
+                settingsMenuIndex = 1
+                if previousGameState == "pauseMenu" then
+                    previousGameState = "game"
+                    gameState = "pauseMenu"
+                    return 
+                end
+                gameState = previousGameState 
+            end
+        end
         love.audio.setVolume(currentVolume)
         if currentVolume > 1 then currentVolume = 1 end
         if currentVolume < 0 then currentVolume = 0 end 
     elseif gameState == "pauseMenu" then
         local option = pausedMenuButtons[pausedMenuIndex]
-        local pausedPlayer = player[pausedPlayerIndex] 
+        pausedPlayer = player[pausedPlayerIndex] 
 
         if pausedPlayer.joystick == joystick and pausedPlayer.paused then
             if btn == "dpup" then
