@@ -1,16 +1,18 @@
 wf = require("libs.windfield")
 local world = wf.newWorld(0, 1000, true)
 
+sti = require("libs.sti")
+
 Camera = require("libs.camera")
 
 anim8 = require("libs.anim8")
 
 Player = require("player")
 
-screenWidth = love.graphics.getWidth()
-screenHeight = love.graphics.getHeight()
+local screenWidth = love.graphics.getWidth()
+local screenHeight = love.graphics.getHeight()
 
-currentOS = love.system.getOS()
+local currentOS = love.system.getOS()
 if currentOS == "iOS" or currentOS == "Android" then
     scale = 2
     miniScale = 1
