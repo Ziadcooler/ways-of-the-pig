@@ -21,8 +21,8 @@ else
     miniScale = 2
 end
 
-retroFont = love.graphics.newFont(30)
-love.graphics.setFont(retroFont)
+font = love.graphics.newFont(30)
+love.graphics.setFont(font)
 
 local gameState
 local previousGameState 
@@ -53,7 +53,7 @@ settingsMenuButtons= {
 settingsMenuIndex = 1
 
 localSelectionButtons = {
-    {name = "Start", isOn = false},
+    {name = "Start", isOn = false, msg = ": Requires at least 2 players"},
     {name = "Back"},
 }
 localSelectionIndex = 1
@@ -99,8 +99,9 @@ function love.update(dt)
         if btn.name == "Start" then
             if joyCount >= 2 then
                 btn.isOn = true 
-            elseif joyCount < 4 then
-                btn.isOn = false 
+                btn.msg = ""
+            elseif joyCount > 4 then
+                btn.msg = ": Remember, max of 4 players"
             end
         end
     end
@@ -222,7 +223,7 @@ function love.draw()
                 if btn.name == "Start" then 
                     if not btn.isOn then
                         love.graphics.setColor(0, 0, 0)
-                        love.graphics.printf("> " .. btn.name .. ": Requires atleast 2 players", 0, y, screenWidth, "center")
+                        love.graphics.printf("> " .. btn.name .. ": Requires 2 players, max of 4", 0, y, screenWidth, "center")
                     else
                         love.graphics.setColor(0, 1, 0)
                         love.graphics.printf("> " .. btn.name, 0, y, screenWidth, "center")

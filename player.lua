@@ -12,7 +12,7 @@ function Player.new(world, joystick, x, y)
     local w, h = 50, 70
     self.collider = world:newRectangleCollider(x, y, w, h)
     self.collider:setFixedRotation(true)
-    self.collider:setRestitution(0.2)
+    self.collider:setRestitution(0.4)
     self.collider:setFriction(0.9)
     self.collider:setLinearDamping(1)
 
