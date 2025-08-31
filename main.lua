@@ -112,13 +112,75 @@ pausedMenuButtons = {
 }
 pausedMenuIndex = 1
 
+function loadMap(mapFile)
+    gameMap = sti(mapFile)
+    mapWidth = gameMap.width * gameMap.tilewidth
+    mapHeight = gameMap.height * gameMap.tileheight
+    transitions = {}
+
+    local mapName = mapFile:match("([^/]+)%.lua$") -- extracts "1-1" from "maps/1-1.lua"
+
+    local biomePrefix = mapName and mapName:match("^(%d+)%-%d+$")
+    if not biomePrefix then
+        error("[ERROR] Invalid mapFile name:", mapFile)
+        return
+    end
+
+
+    if biomePrefix then
+        -- Check if the map should persist music (not ending in "-1")
+        local persist = not mapFile:match("%-1$")
+
+        if not persist or biomePrefix ~= currentBiomeMusic then
+            if currentMapMusic then
+                currentMapMusic:stop()
+                currentMapMusic = nil
+            end
+
+            local musicPath = "sounds/music_for_biome_" .. biomePrefix .. ".mp3"
+            currentMapMusic = love.audio.newSource(musicPath, "stream")
+            currentMapMusic:setLooping(true)
+            currentMapMusic:play()
+
+            currentBiomeMusic = biomePrefix
+        end
+    else
+        -- Not a biome level, maybe it's "mainmenu", "hub", etc.
+        if currentMapMusic then
+            currentMapMusic:stop()
+            currentMapMusic = nil
+        end
+
+        currentBiomeMusic = nil
+
+        -- Optionally handle other music here like:
+        -- if mapFile == "mainmenu" then sounds.main:play() end
+    end
+end 
+
+availableMaps = {
+    {name = "1-1", file = "maps/1-1.lua", unlocked = false, place = 1},
+}
+selectedMapIndex = 1
+
 function love.load()
     gameState = "startMenu"
 
-    ground = world:newRectangleCollider(0, 500, 3000, 50)
-    ground:setType("static")
-
     joysticks = love.joystick.getJoysticks()
+
+    loadMap(availableMaps[1].file)
+
+    platform = {}
+    if gameMap.layers["platform"] and gameMap.layers["platform"].type == "objectgroup" then
+        for i, obj in ipairs(gameMap.layers["platform"].objects) do
+            if obj.shape == "rectangle" then
+                local platform = world:newRectangleCollider(obj.x, obj.y, obj.width, obj.height)
+                platform:setType("static")
+            else
+                print("⚠️ Skipping invalid platform at:", obj.name or "(unnamed)", obj.x, obj.y, obj.width, obj.height)
+            end
+        end 
+    end
 end
 
 function love.update(dt)
