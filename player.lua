@@ -1,12 +1,13 @@
 local Player = {}
 Player.__index = Player
 
-function Player.new(world, joystick, x, y)
+function Player.new(world, joystick, x, y, color)
     local self = setmetatable({}, Player)
     self.joystick = joystick
     self.speed = 300
     self.jumpForce = -2000
     self.onGround = false
+    self.color = color
 
     -- Create collider
     local w, h = 50, 70
@@ -48,7 +49,7 @@ function Player:isGrounded()
 end 
 
 function Player:draw()
-    love.graphics.setColor(1, 0.7, 0.7)
+    love.graphics.setColor(self.color)
     local col = self.collider
     local w, h = 50, 70
     local x, y = col:getPosition()

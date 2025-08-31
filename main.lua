@@ -28,6 +28,46 @@ local gameState
 local previousGameState 
 local pausedPlayerIndex
 
+colors = {
+    red = {1, 0, 0},
+    blue = {0, 0, 1},
+    green = {0, 1, 0},
+    yellow = {1, 1, 0},
+    white = {1, 1, 1},
+    black = {0, 0, 0},
+    pink = {1, 0.7, 0.7},
+    cyan = {0, 1, 1},
+}
+
+availableColors = {
+    colors.red,
+    colors.blue,
+    colors.green,
+    colors.yellow,
+    colors.white,
+    colors.black,
+    colors.pink,
+    colors.cyan,
+}
+
+colorSelectionIndex = {
+    {player = 1, colorIndex = 1},
+    {player = 2, colorIndex = 2},
+    {player = 3, colorIndex = 3},
+    {player = 4, colorIndex = 4},
+}
+
+colorNames = {
+    {name = "Red"},
+    {name = "Blue"},
+    {name = "Green"},
+    {name = "Yellow"},
+    {name = "White"},
+    {name = "Black"},
+    {name = "Pink"},
+    {name = "Cyan"},
+}
+
 currentVolume = 0.5
 love.audio.setVolume(currentVolume)
 
@@ -78,17 +118,6 @@ function love.load()
     ground = world:newRectangleCollider(0, 500, 3000, 50)
     ground:setType("static")
 
-    colors = {
-        red = {1, 0, 0},
-        blue = {0, 0, 1},
-        green = {0, 1, 0},
-        yellow = {1, 1, 0},
-        white = {1, 1, 1},
-        black = {0, 0, 0},
-        pink = {1, 0.7, 0.7},
-        cyan = {0, 1, 1},
-    }
-
     joysticks = love.joystick.getJoysticks()
 end
 
@@ -120,6 +149,8 @@ function love.draw()
         dpad = love.graphics.newImage("assets/images/dpad.png"),
         ps_X = love.graphics.newImage("assets/images/ps_X.png"),
         xbox_A = love.graphics.newImage("assets/images/xbox_A.png"),
+        rb = love.graphics.newImage("assets/images/rb.png"),
+        lb = love.graphics.newImage("assets/images/lb.png"),
     }
 
     if gameState == "startMenu" then
@@ -209,13 +240,29 @@ function love.draw()
             love.graphics.setColor(1,1,1,1)
         end
     elseif gameState == "localSelection" then
-        local joyCount = love.joystick.getJoystickCount()
+        local joysticks = love.joystick.getJoysticks()
+        local joyCount = #joysticks
         local maxPlayers = 4
+        local screenWidth = screenWidth
+        local screenHeight = screenHeight
         if joyCount > maxPlayers then
             joyCount = maxPlayers
         end
         love.graphics.print("Local Coop", screenWidth / 2 - 210, screenHeight / 2 - 500, nil, scale)
         love.graphics.print("Players: (" .. joyCount .. "/" .. maxPlayers .. ")", screenWidth / 2 - 240, screenHeight / 2 - 400, nil, scale)
+        love.graphics.print("Navigate", screenWidth / 2 - 800, screenHeight / 2 + 300, nil, miniScale)
+        love.graphics.print("Select", screenWidth / 2 - 800, screenHeight / 2 + 200, nil, miniScale)
+        love.graphics.print("Change Color", screenWidth / 2 - 800, screenHeight / 2 + 400, nil, miniScale)
+        love.graphics.draw(images.dpad, screenWidth / 2 - 530, screenHeight / 2 + 280, nil, 0.5)
+        love.graphics.draw(images.xbox_A, screenWidth / 2 - 600, screenHeight / 2 + 205, nil, 0.33)
+        love.graphics.draw(images.ps_X, screenWidth / 2 - 530, screenHeight / 2 + 195, nil, 0.4)
+        love.graphics.draw(images.lb, screenWidth / 2 - 360, screenHeight / 2 + 400, nil, 0.4)
+        love.graphics.draw(images.rb, screenWidth / 2 - 240, screenHeight / 2 + 397, nil, 0.4)
+        for i, _ in ipairs(joysticks) do
+            screenHeight = screenHeight - 100
+            love.graphics.setColor(availableColors[colorSelectionIndex[i].colorIndex])
+            love.graphics.print("Player " .. i .. ": " .. colorNames[colorSelectionIndex[i].colorIndex].name, screenWidth / 2 - 500, screenHeight / 2)
+        end
         for i, btn in ipairs(localSelectionButtons) do
             local y = screenHeight / 2 + (i - localSelectionIndex) * 40
 
@@ -329,7 +376,21 @@ function love.gamepadpressed(joystick, btn)
             localSelectionIndex = localSelectionIndex + 1
             
             if localSelectionIndex > #localSelectionButtons then localSelectionIndex = 1 end
-        elseif btn == "a" then
+        elseif btn == "rightshoulder" or btn == "leftshoulder" then
+            for i, joy in ipairs(joysticks) do
+                if joy == joystick then 
+                    if btn == "rightshoulder" then
+                        local p = colorSelectionIndex[i]
+                        p.colorIndex = p.colorIndex + 1
+                        if p.colorIndex > #availableColors then p.colorIndex = 1 end
+                    elseif btn == "leftshoulder" then
+                        local p = colorSelectionIndex[i]
+                        p.colorIndex = p.colorIndex - 1
+                        if p.colorIndex < 1 then p.colorIndex = #availableColors end
+                    end 
+                end 
+            end 
+        elseif btn == "a" then 
             if option.name == "Start" then
                 if option.isOn then
                     localSelectionIndex = 1
@@ -338,7 +399,7 @@ function love.gamepadpressed(joystick, btn)
                     for i = 1, math.min(#joysticks, maxPlayers) do
                         local x, y = 100 + i * 100, 100
                         local joy = joysticks[i]
-                        player[i] = Player.new(world, joy, x, y)
+                        player[i] = Player.new(world, joy, x, y, availableColors[colorSelectionIndex[i].colorIndex])
                     end
                     gameState = "game"
                 end
