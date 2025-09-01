@@ -161,9 +161,6 @@ end
     if world then world:destroy() end
     world = wf.newWorld(0, 1000)
 
-    -- Reset player between map transitions
-    player = nil
-
     -- Transition to map
     if gameMap.layers["transition"] then
         for _, obj in ipairs(gameMap.layers["transition"].objects) do
@@ -523,10 +520,6 @@ function love.draw()
         end
         love.graphics.setColor(1,1,1,1)
     elseif gameState == "game" then 
-        
-        for i, p in ipairs(player) do
-            p:draw()
-        end
 
         local groundX, groundY = ground:getPosition()
         local groundW, groundH = 3000, 50
