@@ -120,48 +120,159 @@ function loadMap(mapFile)
 
     local mapName = mapFile:match("([^/]+)%.lua$") -- extracts "1-1" from "maps/1-1.lua"
 
-    local biomePrefix = mapName and mapName:match("^(%d+)%-%d+$")
-    if not biomePrefix then
-        error("[ERROR] Invalid mapFile name:", mapFile)
-        return
-    end
+local biomePrefix = mapName and mapName:match("^(%d+)%-%d+$")
+if not biomePrefix then
+    error("[ERROR] Invalid mapFile name:", mapFile)
+    return
+end
 
 
-    if biomePrefix then
-        -- Check if the map should persist music (not ending in "-1")
-        local persist = not mapFile:match("%-1$")
+if biomePrefix then
+    -- Check if the map should persist music (not ending in "-1")
+    local persist = not mapFile:match("%-1$")
 
-        if not persist or biomePrefix ~= currentBiomeMusic then
-            if currentMapMusic then
-                currentMapMusic:stop()
-                currentMapMusic = nil
-            end
-
-            local musicPath = "sounds/music_for_biome_" .. biomePrefix .. ".mp3"
-            currentMapMusic = love.audio.newSource(musicPath, "stream")
-            currentMapMusic:setLooping(true)
-            currentMapMusic:play()
-
-            currentBiomeMusic = biomePrefix
-        end
-    else
-        -- Not a biome level, maybe it's "mainmenu", "hub", etc.
+    if not persist or biomePrefix ~= currentBiomeMusic then
         if currentMapMusic then
             currentMapMusic:stop()
             currentMapMusic = nil
         end
 
-        currentBiomeMusic = nil
+        local musicPath = "sounds/music_for_biome_" .. biomePrefix .. ".mp3"
+        currentMapMusic = love.audio.newSource(musicPath, "stream")
+        currentMapMusic:setLooping(true)
+        currentMapMusic:play()
 
-        -- Optionally handle other music here like:
-        -- if mapFile == "mainmenu" then sounds.main:play() end
+        currentBiomeMusic = biomePrefix
     end
+else
+    -- Not a biome level, maybe it's "mainmenu", "hub", etc.
+    if currentMapMusic then
+        currentMapMusic:stop()
+        currentMapMusic = nil
+    end
+
+    currentBiomeMusic = nil
+
+    -- Optionally handle other music here like:
+    -- if mapFile == "mainmenu" then sounds.main:play() end
+end
+
+    -- Reset world
+    if world then world:destroy() end
+    world = wf.newWorld(0, 1000)
+
+    -- Reset player between map transitions
+    player = nil
+
+    -- Transition to map
+    if gameMap.layers["transition"] then
+        for _, obj in ipairs(gameMap.layers["transition"].objects) do
+            table.insert(transitions, obj)
+        end
+    end
+
+    start = {}
+    -- Send back to start menu block
+    if gameMap.layers["start"] then
+        for _, obj in ipairs(gameMap.layers["start"].objects) do
+            table.insert(start, obj)
+        end
+    end
+
+    -- Set player spawn pos
+    if gameMap.layers["spawn"] and gameMap.layers["spawn"].type == "objectgroup" then
+
+        for i, obj in pairs(gameMap.layers["spawn"].objects or {}) do 
+            for i, joy in ipairs(joysticks) do 
+                if obj.name == "player_spawn" then
+                spawnX = obj.x
+                spawnY = obj.y
+                Player.new(world, joy, spawnX, spawnY, availableColors[colorSelectionIndex[i].colorIndex])
+            break
+                end
+            end 
+            break 
+        end
+    end 
+
+    platform = {}
+    if gameMap.layers["platform"] then 
+        for i, obj in pairs(gameMap.layers["platform"].objects) do
+            if obj.shape == "rectangle" then 
+                local platform = world:newRectangleCollider(obj.x, obj.y, obj.width, obj.height)
+                platform:setType("static")
+                else
+                print("⚠️ Skipping invalid platform at:", obj.name or "(unnamed)", obj.x, obj.y, obj.width, obj.height)
+            end
+        end
+    end
+
+world:setCallbacks(
+    function (a, b, col)
+        if a:getUserData() == "player" or b:getUserData() == "player" then 
+            player.canJump = true
+        end
+    end,
+    nil, nil, nil
+)
+fadeAlpha = 1 -- start map faded in
+fadeDirection = -1 -- fade out to visible
+isDead = false
+fadeDuringTransition = false
+
+currentMapName = mapFile:match("([^/]+)%.lua$") -- extracts "1-1" from "maps/1-1.lua"
 end 
 
 availableMaps = {
-    {name = "1-1", file = "maps/1-1.lua", unlocked = false, place = 1},
+    {name = "1-1", file = "maps/1-1.lua", unlocked = true, place = 1},
 }
 selectedMapIndex = 1
+
+function saveProgress()
+    local unlocked = {}
+    for _, map in ipairs(availableMaps) do
+        if map.unlocked then
+            table.insert(unlocked, map.name)
+        end
+    end
+    love.filesystem.write("progress.dat", table.concat(unlocked, ","))
+end
+
+function loadProgress()
+    if love.filesystem.getInfo("progress.dat") then
+        local data = love.filesystem.read("progress.dat")
+        local unlockedMaps = {}
+        for name in string.gmatch(data, "([^,]+)") do
+            unlockedMaps[name] = true
+        end 
+        for _, map in ipairs(availableMaps) do
+            map.unlocked = unlockedMaps[map.name] or false 
+        end
+    end
+end
+
+function unlockNextMap(currentMapName)
+    for i, map in ipairs(availableMaps) do
+        if map.name == currentMapName and i < #availableMaps then
+            availableMaps[i + 1].unlocked = true
+            saveProgress()
+            break 
+        end
+    end
+end
+
+function resetProgress()
+    if love.filesystem.getInfo("progress.dat") then
+        love.filesystem.remove("progress.dat")
+    end
+
+    -- Re-lock all maps except the first one
+    for i, map in ipairs(availableMaps) do
+        map.unlocked = (i == 1)
+    end
+
+    selectedMapindex = 1
+end
 
 function love.load()
     gameState = "startMenu"
@@ -198,9 +309,6 @@ function love.update(dt)
     end
     if gameState ~= "game" then return end 
 
-    for i, p in ipairs(player) do
-        p:update(dt)
-    end
     world:update(dt)
 end 
 
@@ -368,6 +476,35 @@ function love.draw()
             end
         end
         love.graphics.setColor(1,1,1,1)
+    elseif gameState == "mapSelection" then
+        local joysticks = love.joystick.getJoysticks()
+        local joyCount = #joysticks
+        local maxPlayers = 4
+        if joyCount > maxPlayers then
+            joyCount = maxPlayers
+        end
+
+        love.graphics.print("Select a Map", screenWidth / 2 - 210, screenHeight / 2 - 500, nil, scale)
+        love.graphics.print("Players: (" .. joyCount .. "/" .. maxPlayers .. ")", screenWidth / 2 - 240, screenHeight / 2 - 400, nil, scale)
+        love.graphics.print("Navigate", screenWidth / 2 - 800, screenHeight / 2 + 300, nil, miniScale)
+        love.graphics.print("Select", screenWidth / 2 - 800, screenHeight / 2 + 200, nil, miniScale)
+        love.graphics.draw(images.dpad, screenWidth / 2 - 530, screenHeight / 2 + 280, nil, 0.5)
+        love.graphics.draw(images.xbox_A, screenWidth / 2 - 600, screenHeight / 2 + 205, nil, 0.33)
+        love.graphics.draw(images.ps_X, screenWidth / 2 - 530, screenHeight / 2 + 195, nil, 0.4)
+
+        for i, map in ipairs(availableMaps) do
+            local y = screenHeight / 2 + (i - selectedMapIndex) * 40
+
+            if map.unlocked then
+                if i == selectedMapIndex then
+                    love.graphics.setColor(0, 1, 0)
+                    love.graphics.printf("> " .. map.name, 0, y, screenWidth, "center")
+                else
+                    love.graphics.setColor(1, 1, 1)
+                    love.graphics.printf(map.name, 0, y, screenWidth, "center")
+                end
+            end 
+        end
     elseif gameState == "pauseMenu" then
         love.graphics.print("Paused", screenWidth / 2 - 200, screenHeight / 2 - 500, nil, scale)
         
@@ -463,7 +600,7 @@ function love.gamepadpressed(joystick, btn)
                         local joy = joysticks[i]
                         player[i] = Player.new(world, joy, x, y, availableColors[colorSelectionIndex[i].colorIndex])
                     end
-                    gameState = "game"
+                    gameState = "mapSelection"
                 end
             elseif option.name == "Back" then
                 localSelectionIndex = 1
@@ -483,6 +620,29 @@ function love.gamepadpressed(joystick, btn)
         elseif btn == "a" then
             if option.name == "Back" then
                 gameState = previousGameState
+            end 
+        end
+    elseif gameState == "mapSelection" then
+        local option = availableMaps[selectedMapIndex]
+
+        if btn == "dpup" then
+            selectedMapIndex = selectedMapIndex - 1
+
+            if selectedMapIndex < 1 then selectedMapIndex = #availableMaps end 
+        elseif btn == "dpdown" then
+            selectedMapIndex = selectedMapIndex + 1
+            if selectedMapIndex > #availableMaps then selectedMapIndex = 1 end 
+        elseif btn == "a" then
+            if option.unlocked then
+                local mapFile = option.file
+                local maxPlayers = 4
+                for i = 1, math.min(#joysticks, maxPlayers) do
+                    local x, y = 100 + i * 100, 100
+                    local joy = joysticks[i]
+                    player[i] = Player.new(world, joy, x, y, availableColors[colorSelectionIndex[i].colorIndex])
+                end
+                loadMap(loadMap)
+                gameState = "game"
             end 
         end
     elseif gameState == "quitMenu" then
