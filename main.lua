@@ -1,5 +1,21 @@
 wf = require("libs.windfield")
-local world = wf.newWorld(0, 1000, true)
+world = wf.newWorld(0, 1000, true)
+
+local function setupCollisionClasses(world)
+    world:addCollisionClass("Player")
+    world:addCollisionClass("Platform")
+    world:addCollisionClass("Enemy")
+    world:addCollisionClass("Hazard")
+end
+
+function respawnplayer(a, coordA, coordB)
+    a.collider:setPosition(coordA, coordB)
+    a.collider:setLinearVelocity(0, 0)
+    isDead = false
+    a.canJump = false 
+end
+
+setupCollisionClasses(world)
 
 sti = require("libs.sti")
 
@@ -9,6 +25,25 @@ anim8 = require("libs.anim8")
 
 Player = require("player")
 
+-- Death fade variables
+isDead = false
+fadeAlpha = 0
+fadeSpeed = 4
+fadeDirection = 0
+
+-- Transition fade variables
+transitionAlpha = 0
+transitioning = false
+transitionTimer = 0
+transitionDelay = 0.5
+
+-- Special transition variables
+specialTransitionActive = false
+specialTransitionTarget = nil
+specialTransitionTimer = 0
+specialTransitionDelay = 2 -- how long the player flies before transition
+
+local joysticks = love.joystick.getJoysticks()
 local screenWidth = love.graphics.getWidth()
 local screenHeight = love.graphics.getHeight()
 
@@ -126,8 +161,7 @@ if not biomePrefix then
     return
 end
 
-
-if biomePrefix then
+if biomePrefix and not gameState == "startMenu" then
     -- Check if the map should persist music (not ending in "-1")
     local persist = not mapFile:match("%-1$")
 
@@ -159,7 +193,8 @@ end
 
     -- Reset world
     if world then world:destroy() end
-    world = wf.newWorld(0, 1000)
+    world = wf.newWorld(0, 500)
+    setupCollisionClasses(world)
 
     -- Transition to map
     if gameMap.layers["transition"] then
@@ -176,19 +211,19 @@ end
         end
     end
 
+    player = {}
     -- Set player spawn pos
     if gameMap.layers["spawn"] and gameMap.layers["spawn"].type == "objectgroup" then
 
-        for i, obj in pairs(gameMap.layers["spawn"].objects or {}) do 
-            for i, joy in ipairs(joysticks) do 
+        for j, obj in pairs(gameMap.layers["spawn"].objects or {}) do 
+            for i = 1, #joysticks do 
                 if obj.name == "player_spawn" then
-                spawnX = obj.x
-                spawnY = obj.y
-                Player.new(world, joy, spawnX, spawnY, availableColors[colorSelectionIndex[i].colorIndex])
-            break
+                    spawnX = obj.x
+                    spawnY = obj.y
+                    local joy = joysticks[i]
+                    player[i] = Player.new(world, joy, spawnX, spawnY, availableColors[colorSelectionIndex[i].colorIndex])
                 end
             end 
-            break 
         end
     end 
 
@@ -210,25 +245,18 @@ end
     end
 
     platform = {}
-    if gameMap.layers["platform"] then 
-        for i, obj in pairs(gameMap.layers["platform"].objects) do
-            if obj.shape == "rectangle" then 
+    if gameMap.layers["platform"] and gameMap.layers["platform"].type == "objectgroup" then
+        for i, obj in ipairs(gameMap.layers["platform"].objects) do
+            if obj.shape == "rectangle" then
                 local platform = world:newRectangleCollider(obj.x, obj.y, obj.width, obj.height)
                 platform:setType("static")
-                else
+                platform:setCollisionClass("Platform")
+            else
                 print("⚠️ Skipping invalid platform at:", obj.name or "(unnamed)", obj.x, obj.y, obj.width, obj.height)
             end
-        end
+        end 
     end
 
-world:setCallbacks(
-    function (a, b, col)
-        if a:getUserData() == "player" or b:getUserData() == "player" then 
-            player.canJump = true
-        end
-    end,
-    nil, nil, nil
-)
 fadeAlpha = 1 -- start map faded in
 fadeDirection = -1 -- fade out to visible
 isDead = false
@@ -285,27 +313,28 @@ function resetProgress()
         map.unlocked = (i == 1)
     end
 
-    selectedMapindex = 1
+    selectedMapIndex = 1
 end
 
 function love.load()
     gameState = "startMenu"
 
-    joysticks = love.joystick.getJoysticks()
+		loadMap(availableMaps[1].file)
+        loadProgress()
 
-    loadMap(availableMaps[1].file)
+    cam = Camera()
 
-    platform = {}
-    if gameMap.layers["platform"] and gameMap.layers["platform"].type == "objectgroup" then
-        for i, obj in ipairs(gameMap.layers["platform"].objects) do
-            if obj.shape == "rectangle" then
-                local platform = world:newRectangleCollider(obj.x, obj.y, obj.width, obj.height)
-                platform:setType("static")
-            else
-                print("⚠️ Skipping invalid platform at:", obj.name or "(unnamed)", obj.x, obj.y, obj.width, obj.height)
-            end
-        end 
-    end
+    mapWidth  = gameMap.width  * gameMap.tilewidth
+    mapHeight = gameMap.height * gameMap.tileheight
+
+    sounds = {
+        mainTheme = love.audio.newSource('sounds/maintheme.wav', "stream"),
+        deathSFX = love.audio.newSource('sounds/deathsfx.wav', "static"),
+        jump = love.audio.newSource('sounds/jump.mp3', "static"),
+    }
+
+    sounds.mainTheme:play()
+    sounds.mainTheme:setLooping(true)
 end
 
 function love.update(dt)
@@ -323,35 +352,65 @@ function love.update(dt)
     end
     if gameState ~= "game" then return end 
 
-<<<<<<< HEAD
-=======
     sounds.mainTheme:stop()
     for i, p in ipairs(player) do
         p:update(dt)
     end
 
+    local isPulling = {}
     for i, p in ipairs(player) do
-        if p.joystick and p.joystick:isGamepadDown("x") then
-            -- pull joint connected to the player
-            if chains[i] then
-                chains[i]:setLength(60)
-            end
+        isPulling[i] = p.joystick and p.joystick:isGamepadDown("x")
+    end
 
-            if i > 1 and chains[i-1] then
-                chains[i-1]:setLength(60)
-            end 
-        else
-            if chains[i] then chains[i]:setLength(150) end 
-            if i > 1 and chains[i-1] then chains[i-1]:setLength(150) end 
+    for i, joint in ipairs(chains) do
+        local pull = (isPulling[i] or isPulling[i+1])
+        joint:setLength(pull and 60 or 150)
+    end
+
+    if spawnY < 1000 then
+            deathY = 3000
+    else
+        deathY = 1000
+    end
+
+    -- death & fade 
+    for i, p in ipairs(player) do
+        if p and p.collider and p.collider:getY() > deathY and not isDead then
+            isDead = true
+            fadeDirection = 1 -- start fade-in
+            break -- only need one player to trigger global death
         end
     end
 
->>>>>>> dc71c1e (Added chains!)
+    -- Fade logic (once per frame, not per-player)
+    if fadeDirection ~= 0 then
+        fadeAlpha = fadeAlpha + fadeDirection * fadeSpeed * dt
+
+        if fadeDirection == 1 and fadeAlpha >= 1 then
+            fadeAlpha = 1
+
+            -- Respawn everyone
+            for _, p in ipairs(player) do
+                respawnplayer(p, spawnX, spawnY)
+            end
+
+            -- prepare fade-out
+            fadeDirection = -1
+            isDead = false
+        elseif fadeDirection == -1 and fadeAlpha <= 0 then
+            fadeAlpha = 0
+            fadeDirection = 0
+            fadeDuringTransition = false
+        end
+    end
+
     world:update(dt)
 end 
 
 function love.draw()
     love.graphics.setBackgroundColor(0.2, 0.7, 1)
+
+
 
     images = {
         dpad = love.graphics.newImage("assets/images/dpad.png"),
@@ -543,6 +602,7 @@ function love.draw()
                 end
             end 
         end
+        love.graphics.setColor(1,1,1,1)
     elseif gameState == "pauseMenu" then
         love.graphics.print("Paused", screenWidth / 2 - 200, screenHeight / 2 - 500, nil, scale)
         
@@ -560,15 +620,6 @@ function love.draw()
             end
         end
         love.graphics.setColor(1,1,1,1)
-<<<<<<< HEAD
-    elseif gameState == "game" then 
-
-        local groundX, groundY = ground:getPosition()
-        local groundW, groundH = 3000, 50
-        love.graphics.setColor(0, 0, 1)
-        love.graphics.rectangle("fill", groundX, groundY, groundW, groundH)
-        love.graphics.setColor(1,1,1,1)
-=======
     elseif gameState == "game" then
         love.graphics.setColor(1,1,1,1)
 
@@ -577,6 +628,9 @@ function love.draw()
 
         -- draw players (they use physics positions, so they line up)
         for i, p in ipairs(player) do
+            local x, y = p.collider:getPosition()
+            local w, h = 50, 70
+            love.graphics.print(i, x - 10, y - 100, nil, 2)
             p:draw()
         end
 
@@ -589,11 +643,16 @@ function love.draw()
         end
         love.graphics.setColor(1,1,1,1)
 
+        if fadeAlpha > 0 then
+            love.graphics.setColor(0, 0, 0, fadeAlpha)
+            love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+            love.graphics.setColor(1, 1, 1, 1) -- resets the color  
+        end
+
         -- draw physics colliders if you want debug
         if settingsMenuButtons[2].isOn then
             world:draw()
         end
->>>>>>> dc71c1e (Added chains!)
     end 
 end 
 
@@ -655,18 +714,14 @@ function love.gamepadpressed(joystick, btn)
                 if option.isOn then
                     localSelectionIndex = 1
 
-                    local maxPlayers = 4
-                    for i = 1, math.min(#joysticks, maxPlayers) do
-                        local x, y = 100 + i * 100, 100
-                        local joy = joysticks[i]
-                        player[i] = Player.new(world, joy, x, y, availableColors[colorSelectionIndex[i].colorIndex])
-                    end
                     gameState = "mapSelection"
                 end
             elseif option.name == "Back" then
                 localSelectionIndex = 1
                 gameState = previousGameState
             end
+		elseif btn == "b" then
+            
         end
     elseif gameState == "onlineSelection" then
         local option = onlineSelectionButtons[onlineSelectionIndex]
@@ -696,13 +751,7 @@ function love.gamepadpressed(joystick, btn)
         elseif btn == "a" then
             if option.unlocked then
                 local mapFile = option.file
-                local maxPlayers = 4
-                for i = 1, math.min(#joysticks, maxPlayers) do
-                    local x, y = 100 + i * 100, 100
-                    local joy = joysticks[i]
-                    player[i] = Player.new(world, joy, x, y, availableColors[colorSelectionIndex[i].colorIndex])
-                end
-                loadMap(loadMap)
+                loadMap(mapFile)
                 gameState = "game"
             end 
         end
