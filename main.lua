@@ -192,6 +192,23 @@ end
         end
     end 
 
+    chains = {}
+    for i = 1, #player - 1 do
+        local p1 = player[i].collider 
+        local p2 = player[i+1].collider
+        local joint = world:addJoint(
+            "DistanceJoint",
+            p1, p2,
+            p1:getX(), p1:getY(),
+            p2:getX(), p2:getY(),
+            false
+        )
+        joint:setLength(150)
+        joint:setFrequency(3)
+        joint:setDampingRatio(0.7)
+        table.insert(chains, joint)
+    end
+
     platform = {}
     if gameMap.layers["platform"] then 
         for i, obj in pairs(gameMap.layers["platform"].objects) do
@@ -306,6 +323,30 @@ function love.update(dt)
     end
     if gameState ~= "game" then return end 
 
+<<<<<<< HEAD
+=======
+    sounds.mainTheme:stop()
+    for i, p in ipairs(player) do
+        p:update(dt)
+    end
+
+    for i, p in ipairs(player) do
+        if p.joystick and p.joystick:isGamepadDown("x") then
+            -- pull joint connected to the player
+            if chains[i] then
+                chains[i]:setLength(60)
+            end
+
+            if i > 1 and chains[i-1] then
+                chains[i-1]:setLength(60)
+            end 
+        else
+            if chains[i] then chains[i]:setLength(150) end 
+            if i > 1 and chains[i-1] then chains[i-1]:setLength(150) end 
+        end
+    end
+
+>>>>>>> dc71c1e (Added chains!)
     world:update(dt)
 end 
 
@@ -519,6 +560,7 @@ function love.draw()
             end
         end
         love.graphics.setColor(1,1,1,1)
+<<<<<<< HEAD
     elseif gameState == "game" then 
 
         local groundX, groundY = ground:getPosition()
@@ -526,6 +568,32 @@ function love.draw()
         love.graphics.setColor(0, 0, 1)
         love.graphics.rectangle("fill", groundX, groundY, groundW, groundH)
         love.graphics.setColor(1,1,1,1)
+=======
+    elseif gameState == "game" then
+        love.graphics.setColor(1,1,1,1)
+
+        -- draw map
+        gameMap:draw()
+
+        -- draw players (they use physics positions, so they line up)
+        for i, p in ipairs(player) do
+            p:draw()
+        end
+
+        -- chains!
+        love.graphics.setLineWidth(4)
+        love.graphics.setColor(0.2, 1, 0)
+        for _, joint in ipairs(chains) do
+            local x1, y1, x2, y2 = joint:getAnchors()
+            love.graphics.line(x1, y1, x2, y2)
+        end
+        love.graphics.setColor(1,1,1,1)
+
+        -- draw physics colliders if you want debug
+        if settingsMenuButtons[2].isOn then
+            world:draw()
+        end
+>>>>>>> dc71c1e (Added chains!)
     end 
 end 
 

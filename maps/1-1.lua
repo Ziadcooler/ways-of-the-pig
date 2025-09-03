@@ -150,11 +150,45 @@ return {
           height = 384,
           rotation = 0,
           visible = true,
+          properties = {
+            ["targetMap"] = "maps/1-2.lua"
+          }
+        }
+      }
+    },
+    {
+<<<<<<< HEAD
+=======
+      type = "objectgroup",
+      draworder = "topdown",
+      id = 4,
+      name = "spawn",
+      class = "",
+      visible = false,
+      opacity = 1,
+      offsetx = 0,
+      offsety = 0,
+      parallaxx = 1,
+      parallaxy = 1,
+      properties = {},
+      objects = {
+        {
+          id = 7,
+          name = "player_spawn",
+          type = "",
+          shape = "rectangle",
+          x = 0.666667,
+          y = 384,
+          width = 64,
+          height = 64,
+          rotation = 0,
+          visible = true,
           properties = {}
         }
       }
     },
     {
+>>>>>>> dc71c1e (Added chains!)
       type = "tilelayer",
       x = 0,
       y = 0,
