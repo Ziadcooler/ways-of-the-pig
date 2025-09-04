@@ -15,6 +15,16 @@ function respawnplayer(a, coordA, coordB)
     a.canJump = false 
 end
 
+function special_transition(a, targetMap)
+    a:setPosition(400, 400)
+    a:setLinearVelocity(0, -3500)
+    specialTransitionActive = true
+    specialTransitionTarget = targetMap
+    specialTransitionTimer = 0
+    fadeAlpha = 0
+    fadeDirection = 1
+end
+
 setupCollisionClasses(world)
 
 sti = require("libs.sti")
@@ -36,6 +46,8 @@ transitionAlpha = 0
 transitioning = false
 transitionTimer = 0
 transitionDelay = 0.5
+timer = 0
+delay = 0
 
 -- Special transition variables
 specialTransitionActive = false
@@ -267,6 +279,7 @@ end
 
 availableMaps = {
     {name = "1-1", file = "maps/1-1.lua", unlocked = true, place = 1},
+    {name = "1-2", file = "maps/1-2.lua", unlocked = true, place = 2},
 }
 selectedMapIndex = 1
 
@@ -367,6 +380,56 @@ function love.update(dt)
         joint:setLength(pull and 60 or 150)
     end
 
+     -- Looking for transition
+    local touching = false 
+    for _, trans in ipairs(transitions) do
+        for _, p in ipairs(player) do
+            local playerx1, playery1, playerx2, playery2 = p.collider:getBoundingBox()
+            if playerx1 < trans.x + trans.width and
+            playerx2 > trans.x and
+            playery1 < trans.y + trans.height and
+            playery2 > trans.y then
+            touching = true
+            end 
+        end 
+        -- Transition is triggered
+        if trans.name == "special_transition_block" and trans.properties and trans.properties.targetMap then
+            if not triggered then 
+                fadeDuringTransition = true
+                timer = timer + dt
+                if timer >= delay then
+                    local target = trans.properties.targetMap
+                    for _, p in ipairs(player) do
+                        special_transition(p, target)
+                    end 
+                    print("🟡 Transition triggered, target map:", target)
+                    triggered = true 
+                end
+            end 
+        elseif trans.properties and trans.properties.targetMap then
+            if not triggered then
+                fadeDuringTransition = true 
+                timer = timer + dt
+                if timer >= delay then 
+                -- Inside transition trigger check:
+                    local target = trans.properties.targetMap
+                    if type(target) == "string" and love.filesystem.getInfo(target) then
+                        pendingTransitionTarget = target
+                        transitioning = true
+                        transitionAlpha = 0
+                        transitionTimer = 0
+                        triggered = true
+                    end
+                end
+            end
+        end
+    end 
+
+    if not touching then
+        timer = 0 
+        triggered = false 
+    end
+
     if spawnY < 1000 then
             deathY = 3000
     else
@@ -403,6 +466,26 @@ function love.update(dt)
             fadeDuringTransition = false
         end
     end
+
+    -- transitioning into other maps
+    if transitioning then 
+        transitionTimer = transitionTimer + dt
+        transitionAlpha = math.min(transitionTimer / transitionDelay, 1)
+
+        if transitionTimer >= transitionDelay then
+            if pendingTransitionTarget and love.filesystem.getInfo(pendingTransitionTarget) then
+                unlockNextMap(currentMapName) 
+                loadMap(pendingTransitionTarget)
+                for _, p in ipairs(player) do
+                    respawnplayer(p, spawnX, spawnY)
+                end
+            end
+            transitioning = false
+            transitionAlpha = 0
+            transitionTimer = 0
+            pendingTransitionTarget = nil
+        end
+    end 
 
     world:update(dt)
 end 
