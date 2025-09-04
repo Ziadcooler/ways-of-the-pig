@@ -5,7 +5,7 @@ function Player.new(world, joystick, x, y, color)
     local self = setmetatable({}, Player)
     self.joystick = joystick
     self.speed = 300
-    self.jumpForce = -400
+    self.jumpForce = -800
     self.onGround = false
     self.color = color
 
@@ -51,7 +51,7 @@ function Player:isGrounded()
         y + h/2,
         w - 2,
         groundCheckHeight,
-        { "Platform", "Player" } -- include other players too
+        { "Platform" } -- include other players too
     )
 
     for _, col in ipairs(colliders) do

@@ -384,7 +384,10 @@ function love.update(dt)
     local touching = false 
     for _, trans in ipairs(transitions) do
         for _, p in ipairs(player) do
-            local playerx1, playery1, playerx2, playery2 = p.collider:getBoundingBox()
+            local px, py = p.collider:getPosition()
+            local pw, ph = 50, 70 -- same as your player size
+            local playerx1, playery1 = px - pw/2, py - ph/2
+            local playerx2, playery2 = px + pw/2, py + ph/2
             if playerx1 < trans.x + trans.width and
             playerx2 > trans.x and
             playery1 < trans.y + trans.height and
