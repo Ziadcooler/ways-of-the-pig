@@ -35,6 +35,12 @@ anim8 = require("libs.anim8")
 
 Player = require("player")
 
+local socket = require("socket")
+local serverConn = nil 
+
+local InputBar = require("inputBar")
+local bar 
+
 -- Death fade variables
 isDead = false
 fadeAlpha = 0
@@ -145,10 +151,15 @@ localSelectionButtons = {
 }
 localSelectionIndex = 1
 
-onlineSelectionButtons = {
-    {name = "Host Room"},
-    {name = "Join Room"},
+onlineConnectionButtons = {
+    {name = "Connect"},
     {name = "Back"},
+}
+onlineConnectionIndex = 1
+
+onlineSelectionButtons = {
+    {name = "Start", isOn = false},
+    {name = "Disconnect"},
 }
 onlineSelectionIndex = 1
 
@@ -365,6 +376,19 @@ function love.update(dt)
     end
     if gameState ~= "game" then return end 
 
+    if serverConn then
+        serverConn:settimeout(0) -- non-blocking
+
+        -- Send player position
+        local x, y = player.collider:getPosition()
+        serverConn:send(string.format("%f,%f\n", x, y))
+
+        local data, err = serverConn:receive()
+        if data then
+            print("Got from server:", data)
+        end
+    end
+
     sounds.mainTheme:stop()
     for i, p in ipairs(player) do
         p:update(dt)
@@ -489,7 +513,7 @@ function love.update(dt)
             pendingTransitionTarget = nil
         end
     end 
-
+    
     world:update(dt)
 end 
 
@@ -646,11 +670,15 @@ function love.draw()
             end
         end
         love.graphics.setColor(1,1,1,1)
-    elseif gameState == "onlineSelection" then
+    elseif gameState == "onlineConnection" then
         love.graphics.print("Under construction!", screenWidth / 2 - 150, screenHeight / 2 - 500, nil, scale)
-        for i, btn in ipairs(onlineSelectionButtons) do
-            local y = screenHeight / 2 + (i - onlineSelectionIndex) * 40
-            if i == onlineSelectionIndex then
+        if bar then
+            love.graphics.print("Enter Server IP:", screenWidth / 2 - 300, screenHeight / 2 - 150)
+            bar:draw()
+        end
+        for i, btn in ipairs(onlineConnectionButtons) do
+            local y = screenHeight / 2 + (i - onlineConnectionIndex) * 40
+            if i == onlineConnectionIndex then
                 love.graphics.setColor(0, 1, 0)
                 love.graphics.printf("> " .. btn.name, 0, y, screenWidth, "center")
             else
@@ -659,6 +687,59 @@ function love.draw()
             end
         end
         love.graphics.setColor(1,1,1,1)
+    elseif gameState == "onlineSelection" then
+        local joysticks = love.joystick.getJoysticks()
+        local joyCount = #joysticks
+        local maxPlayers = 4
+        local screenWidth = screenWidth
+        local screenHeight = screenHeight
+        if joyCount > maxPlayers then
+            joyCount = maxPlayers
+        end
+        love.graphics.print("Online Coop", screenWidth / 2 - 210, screenHeight / 2 - 500, nil, scale)
+        love.graphics.print("Players: (" .. joyCount .. "/" .. maxPlayers .. ")", screenWidth / 2 - 240, screenHeight / 2 - 400, nil, scale)
+        love.graphics.print("Navigate", screenWidth / 2 - 800, screenHeight / 2 + 300, nil, miniScale)
+        love.graphics.print("Select", screenWidth / 2 - 800, screenHeight / 2 + 200, nil, miniScale)
+        love.graphics.print("Change Color", screenWidth / 2 - 800, screenHeight / 2 + 400, nil, miniScale)
+        love.graphics.draw(images.dpad, screenWidth / 2 - 530, screenHeight / 2 + 280, nil, 0.5)
+        love.graphics.draw(images.xbox_A, screenWidth / 2 - 600, screenHeight / 2 + 205, nil, 0.33)
+        love.graphics.draw(images.ps_X, screenWidth / 2 - 530, screenHeight / 2 + 195, nil, 0.4)
+        love.graphics.draw(images.lb, screenWidth / 2 - 360, screenHeight / 2 + 400, nil, 0.4)
+        love.graphics.draw(images.rb, screenWidth / 2 - 240, screenHeight / 2 + 397, nil, 0.4)
+        for i, _ in ipairs(joysticks) do
+            screenHeight = screenHeight - 100
+            love.graphics.setColor(availableColors[colorSelectionIndex[i].colorIndex])
+            love.graphics.print("Player " .. i .. ": " .. colorNames[colorSelectionIndex[i].colorIndex].name, screenWidth / 2 - 500, screenHeight / 2)
+        end
+        for i, btn in ipairs(onlineSelectionButtons) do
+            local y = screenHeight / 2 + (i - onlineSelectionIndex) * 40
+
+            if i == localSelectionIndex then
+                if btn.name == "Start" then 
+                    if not btn.isOn then
+                        love.graphics.setColor(0, 0, 0)
+                        love.graphics.printf("> " .. btn.name .. ": Requires 2 players, max of 4", 0, y, screenWidth, "center")
+                    else
+                        love.graphics.setColor(0, 1, 0)
+                        love.graphics.printf("> " .. btn.name, 0, y, screenWidth, "center")
+                    end 
+                else
+                    love.graphics.setColor(0, 1, 0)
+                    love.graphics.printf("> " .. btn.name, 0, y, screenWidth, "center")
+                end
+            else
+                love.graphics.setColor(1, 1, 1)
+                if btn.name == "Start" then
+                    if not btn.isOn then
+                        love.graphics.printf(btn.name .. ": Requires 2 players, max of 4", 0, y, screenWidth, "center")
+                    else
+                        love.graphics.printf(btn.name, 0, y, screenWidth, "center")
+                    end 
+                else
+                    love.graphics.printf(btn.name, 0, y, screenWidth, "center")
+                end
+            end
+        end
     elseif gameState == "mapSelection" then
         local joysticks = love.joystick.getJoysticks()
         local joyCount = #joysticks
@@ -759,8 +840,21 @@ function love.gamepadpressed(joystick, btn)
                 previousGameState = gameState
                 gameState = "localSelection"
             elseif option.name == "Online" then
+                bar = InputBar.new(screenWidth / 2 - 300, screenHeight / 2 - 100, 800, 70)
+                bar.onEnter = function(ip) 
+                    print("Trying to connect to: " .. ip)
+                    serverConn = socket.tcp()
+                    serverConn:settimeout(3)
+                    local ok, err = serverConn:connect(ip, 9000)
+                    if ok then
+                        print("Connected to server!")
+                    else
+                        print("Failed to connect: " .. tostring(err))
+                        serverConn = nil 
+                    end
+                end 
                 previousGameState = gameState
-                gameState = "onlineSelection"
+                gameState = "onlineConnection"
             elseif option.name == "Options" then
                 previousGameState = gameState 
                 gameState = "settingsMenu"
@@ -809,19 +903,33 @@ function love.gamepadpressed(joystick, btn)
 		elseif btn == "b" then
             
         end
-    elseif gameState == "onlineSelection" then
-        local option = onlineSelectionButtons[onlineSelectionIndex]
+    elseif gameState == "onlineConnection" then
+        local option = onlineConnectionButtons[onlineConnectionIndex]
         if btn == "dpup" then
-            onlineSelectionIndex = onlineSelectionIndex - 1
+            onlineConnectionIndex = onlineConnectionIndex - 1
 
-            if onlineSelectionIndex < 1 then onlineSelectionIndex = #onlineSelectionButtons end
+            if onlineConnectionIndex < 1 then onlineConnectionIndex = #onlineConnectionButtons end
         elseif btn == "dpdown" then
-            onlineSelectionIndex = onlineSelectionIndex + 1
+            onlineConnectionIndex = onlineConnectionIndex + 1
 
-            if onlineSelectionIndex > #onlineSelectionButtons then onlineSelectionIndex = 1 end
+            if onlineConnectionIndex > #onlineConnectionButtons then onlineConnectionIndex = 1 end
         elseif btn == "a" then
             if option.name == "Back" then
+                onlineConnectionIndex = 1
                 gameState = previousGameState
+            elseif option.name == "Connect" or option.name == "Connected!" then
+                if serverConn then
+                    serverConn:send("Hello from ways-of-the-pig!")
+                else
+                    bar.onEnter(bar.text)
+                    option.name = "Connected!"
+                    time.sleep(1.5)
+                    option.name = "Continue"
+                end
+            elseif option.name == "Continue" then
+                onlineConnectionIndex = 1
+                previousGameState = gameState
+                gameState = "onlineSelection"
             end 
         end
     elseif gameState == "mapSelection" then
@@ -950,3 +1058,18 @@ function love.gamepadpressed(joystick, btn)
         end
     end
 end
+
+function love.mousepressed(x, y, btn)
+    bar:mousepressed(x, y, btn)
+end
+
+function love.textinput(t)
+    bar:textinput(t)
+end 
+
+function love.keypressed(key)
+    bar:keypressed(key)
+    if key == "return" then
+        print("You entered:", bar.text)
+    end
+end 
